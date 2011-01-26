@@ -92,16 +92,35 @@ class Comment < String
 end
 
 class Issue
-  attr_accessor :filename, :ln, :message, :n
+  attr_accessor :filename, :ln, :message, :type, :n
 
-  def initialize(filename, ln, message, n = nil)
+  def initialize(filename, ln, message, type = "todo", n = nil)
     @filename = filename
     @ln = ln
-    @message = message
-    @n = n
+    @message = message.strip
+    @type = type.downcase
+    @n = n.to_i if n
+  end
+
+  def to_s
+    if @n
+      i = sprintf(" (#%d)", @n)
+    else
+      i = ""
+    end
+
+    return sprintf("%s:%d\t%s%s\n", @filename, @ln, @message, i);
   end
 end
 
+issues = []
 ARGV.each do |file|
   s = SourceFile.new file
+
+  s.comments.each {|c|
+    c.scan(/^.*?(TODO|FIXME)( #([0-9]+))?(.*)$/i)
+    issues << Issue.new(s.filename, c.ln, $4, $1, $3);
+  }
 end
+
+puts issues
