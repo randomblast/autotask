@@ -1,17 +1,13 @@
 #!/usr/bin/ruby
 
 class SourceFile
+  attr_accessor :comments, :filename
 
-  attr_accessor :comments # Array of comment bodies that we've parsed
-
-  
-
-  @filename
   @f # File pointer
 
   # Comment-finding regexes
   @@r_comments = {
-    "hash" => /#(.*)$/,
+    "hash" => /^[^#]*#(.*)$/,
     "inline_c" => /\/\/(.*)$/,
     "multiline_c" => /\/\*(.*?)\*\//m
   }
@@ -24,7 +20,7 @@ class SourceFile
 
   # Comment forms to expect in each type
   @@types = {
-    "php" => ["hash", "inline_c", "multiline_c"]
+    "php" => ["multiline_c", "inline_c", "hash"]
   }
 
   # Pattern to strip non-code text from files
@@ -43,17 +39,25 @@ class SourceFile
 
     code = @f.read
 
+    # Strip non-code text and replace with blank lines
     if @@r_not_code[self.type]
-      @@r_not_code[self.type].each do |r|
-        code.gsub!(r, "")
-      end
+      @@r_not_code[self.type].each {|r|
+        code.gsub!(r) {|m|
+          "\n" * m.count("\n")
+        }
+      }
     end
 
     # Add comments to array
-    @@types[self.type].each {|r|
-      code.gsub!(@@r_comments[r]) {|m|
-        @comments << m
-      }
+    @@types[self.type].each {|rid|
+      r = @@r_comments[rid]
+
+      while
+        code.gsub!(/(.*)(#{r})/m) {|m|
+          @comments << Comment.new($3, $1.count("\n") + 2) # TODO Find out why this number is 2 short
+          $1 << ("\n" * $2.count("\n"))
+        }
+      end
     }
   end
 
@@ -76,9 +80,27 @@ class SourceFile
     # Nothing matches
     nil
   end
-
 end
 
+class Comment < String
+  attr_accessor :ln
+
+  def initialize(body, ln)
+    @ln = ln
+    super(body)
+  end
+end
+
+class Issue
+  attr_accessor :filename, :ln, :message, :n
+
+  def initialize(filename, ln, message, n = nil)
+    @filename = filename
+    @ln = ln
+    @message = message
+    @n = n
+  end
+end
 
 ARGV.each do |file|
   s = SourceFile.new file
